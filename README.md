@@ -44,7 +44,7 @@ To run Laracoffee locally, follow these steps:
    ```
 2. Change to the project directory
     ```bash
-    cd laracoffee
+    cd first
     ```
 3. Install the project dependencies
     ```bash
