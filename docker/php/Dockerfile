@@ -33,7 +33,16 @@ COPY . .
 
 RUN composer install --no-dev --optimize-autoloader --prefer-source
 
+RUN mkdir -p storage/logs \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    bootstrap/cache
+
 RUN chown -R www-data:www-data storage bootstrap/cache
+
+RUN chmod -R 775 storage bootstrap/cache
+
 
 EXPOSE 80
 
