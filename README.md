@@ -55,32 +55,46 @@ To run Laracoffee locally, follow these steps:
     ```bash
     copy .env.example .env
     ```
-5. Generate an application key
+5. Create the Docker build of it.
+   ```bash
+    docker compose build
+    ```
+6. Start the Docker build of it.
+   ```bash
+    docker compose up -d 
+    ```
+7. Check whether the dokcer is running or not.
     ```bash
-    php artisan key:generate
+    docker ps
+    ```
+8. Again install the dependencies inside container.
+    ```bash
+    docker compose exec app composer update
     ```
 
-6. Create a symbolic link for the storage directory
+9. Generate an application key
+    ```bash
+    docker compose exec app php artisan key:generate
+    ```
+
+10. Create a symbolic link for the storage directory
    ```bash
-   php artisan storage:link
+   docker compose exec app php artisan storage:link
    ```
-8. Set the filesystem disk to public in the .env file
+
+11. Set the filesystem disk to public in the .env file
    ```bash
    FILESYSTEM_DISK=public
    ```
-6. Migrate the database
+12. Migrate the database
     ```bash
-    php artisan migrate
+    docker compose exec app php artisan migrate
     ```
-7. Seed the database with sample data (optional):
+13. Seed the database with sample data (optional):
     ```bash
-    php artisan db:seed
+     docker compose exec app php artisan db:seed
     ```
-8. Start the development server
-    ```bash
-    php artisan serve
-    ```
-9. Access the application in your browser at http://localhost:8000
+9. Access the application in your browser at http://localhost:80
 
 ## Usage
 - Visit the website and register for an account.
