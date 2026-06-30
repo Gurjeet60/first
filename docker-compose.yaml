@@ -1,4 +1,11 @@
+version: "3.9"
+
 services:
+
+  ##########################################################
+  # Laravel Application
+  ##########################################################
+
   app:
     build:
       context: .
@@ -6,31 +13,113 @@ services:
 
     container_name: laravel_app
 
+    restart: unless-stopped
+
     ports:
       - "80:80"
+
+    volumes:
+      - .:/var/www/html
 
     env_file:
       - .env
 
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
-    volumes:
-      - .:/var/www/html
+    networks:
+      - laravel
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  ##########################################################
+  # MySQL
+  ##########################################################
 
   mysql:
     image: mysql:8.0
 
     container_name: laravel_mysql
 
+    restart: unless-stopped
+
+    ports:
+      - "3306:3306"
+
     environment:
+      MYSQL_ROOT_PASSWORD: root123
       MYSQL_DATABASE: laravel
       MYSQL_USER: laravel
       MYSQL_PASSWORD: NewPassword123!
-      MYSQL_ROOT_PASSWORD: root123
+
+    command:
+      --default-authentication-plugin=mysql_native_password
 
     volumes:
       - mysql_data:/var/lib/mysql
+
+    networks:
+      - laravel
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-uroot",
+          "-proot123"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  ##########################################################
+  # phpMyAdmin (Optional)
+  ##########################################################
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+
+    container_name: laravel_phpmyadmin
+
+    restart: unless-stopped
+
+    ports:
+      - "8080:80"
+
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: root123
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    networks:
+      - laravel
+
+##########################################################
+# Networks
+##########################################################
+
+networks:
+  laravel:
+    driver: bridge
+
+##########################################################
+# Volumes
+##########################################################
 
 volumes:
   mysql_data:
