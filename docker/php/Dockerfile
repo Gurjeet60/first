@@ -1,49 +1,127 @@
 FROM php:8.4-apache
 
-RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    zip \
-    curl \
-    libzip-dev \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev
+LABEL maintainer="Gurjeet Singh"
 
-# Install Node.js 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+############################
+# Install Linux Packages
+############################
+
+RUN apt-get update && apt-get install -y \
+        git \
+        unzip \
+        zip \
+        curl \
+        nano \
+        vim \
+        libzip-dev \
+        libpng-dev \
+        libjpeg62-turbo-dev \
+        libfreetype6-dev \
+        libonig-dev \
+        libxml2-dev \
+        libicu-dev \
+        libpq-dev \
+        default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+############################
+# Install PHP Extensions
+############################
+
+RUN docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg
 
 RUN docker-php-ext-install \
-    pdo \
-    pdo_mysql \
-    mbstring \
-    bcmath \
-    zip
+        pdo \
+        pdo_mysql \
+        mysqli \
+        mbstring \
+        zip \
+        bcmath \
+        intl \
+        gd \
+        exif
 
-RUN a2enmod rewrite
+############################
+# Enable Apache Rewrite
+############################
 
-COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
+RUN a2enmod rewrite headers
+
+############################
+# Install NodeJS 20
+############################
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && npm install -g npm
+
+############################
+# Install Composer
+############################
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+############################
+# Apache Configuration
+############################
+
+COPY docker/apache/000-default.conf \
+     /etc/apache2/sites-available/000-default.conf
+
+############################
+# Working Directory
+############################
+
 WORKDIR /var/www/html
+
+############################
+# Copy Project
+############################
 
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader --prefer-source
+############################
+# Laravel Directories
+############################
 
-RUN mkdir -p storage/logs \
+RUN mkdir -p \
+    storage/logs \
     storage/framework/cache \
     storage/framework/sessions \
+    storage/framework/testing \
     storage/framework/views \
     bootstrap/cache
 
-RUN chown -R www-data:www-data storage bootstrap/cache
+############################
+# Permissions
+############################
 
-RUN chmod -R 775 storage bootstrap/cache
+RUN chown -R www-data:www-data \
+    storage \
+    bootstrap/cache
 
+RUN chmod -R 775 \
+    storage \
+    bootstrap/cache
+
+############################
+# Entrypoint
+############################
+
+COPY docker/php/docker-entrypoint.sh \
+     /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+############################
+# Expose Apache
+############################
 
 EXPOSE 80
+
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 CMD ["apache2-foreground"]
