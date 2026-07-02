@@ -13,7 +13,7 @@ services:
   laravel_app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/php/Dockerfile
     container_name: laravel_app
     working_dir: /var/www/html
     ports:
