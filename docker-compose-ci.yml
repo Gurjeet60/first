@@ -1,0 +1,29 @@
+# docker-compose.ci.yml
+# CI-only override — used by Jenkins on top of docker-compose.yml.
+# Key differences from the base file:
+#   1. NO bind mount of source code over /var/www/html — the image's
+#      built-in COPY . . (with vendor/ already installed) is used as-is.
+#      This is what was overwriting vendor/ and blocking writes before.
+#   2. Adds the DB credentials Laravel actually needs (DB_DATABASE,
+#      DB_USERNAME, DB_PASSWORD) which the base compose file never set.
+#   3. Adds MYSQL_DATABASE/USER/PASSWORD so MySQL creates a matching DB.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+
+services:
+  laravel_app:
+    volumes: []   # explicitly clear the ro bind mount from the base file
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=laravel_mysql
+      - DB_PORT=3306
+      - DB_DATABASE=laravel
+      - DB_USERNAME=laravel
+      - DB_PASSWORD=NewPassword123!
+      - APP_ENV=testing
+
+  laravel_mysql:
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_DATABASE=laravel

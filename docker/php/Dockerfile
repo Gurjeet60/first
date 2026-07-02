@@ -1,11 +1,14 @@
-FROM php:8.4-apache
+# ============================================================
+# Laracoffee — Production-ready PHP 8.4 + Apache image
+# Repo: https://github.com/snykk/Laracoffee
+# ============================================================
 
+FROM php:8.4-apache
 LABEL maintainer="Gurjeet Singh"
 
-############################
-# Install Linux Packages
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 1. System packages
+# ──────────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y \
         git \
         unzip \
@@ -24,15 +27,13 @@ RUN apt-get update && apt-get install -y \
         default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
-############################
-# Install PHP Extensions
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 2. PHP extensions
+# ──────────────────────────────────────────────────────────────
 RUN docker-php-ext-configure gd \
         --with-freetype \
-        --with-jpeg
-
-RUN docker-php-ext-install \
+        --with-jpeg \
+    && docker-php-ext-install \
         pdo \
         pdo_mysql \
         mysqli \
@@ -43,85 +44,74 @@ RUN docker-php-ext-install \
         gd \
         exif
 
-############################
-# Enable Apache Rewrite
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 3. Apache — enable mod_rewrite & headers
+# ──────────────────────────────────────────────────────────────
 RUN a2enmod rewrite headers
 
-############################
-# Install NodeJS 20
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 4. Node.js 20 + npm (for npm run build / vite)
+# ──────────────────────────────────────────────────────────────
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get update \
     && apt-get install -y nodejs \
-    && npm install -g npm
+    && npm install -g npm \
+    && rm -rf /var/lib/apt/lists/*
 
-############################
-# Install Composer
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 5. Composer
+# ──────────────────────────────────────────────────────────────
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-############################
-# Apache Configuration
-############################
+# ──────────────────────────────────────────────────────────────
+# 6. Apache virtualhost
+# ──────────────────────────────────────────────────────────────
+COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-COPY docker/apache/000-default.conf \
-     /etc/apache2/sites-available/000-default.conf
-
-############################
-# Working Directory
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 7. Working directory
+# ──────────────────────────────────────────────────────────────
 WORKDIR /var/www/html
 
-############################
-# Copy Project
-############################
-
+# ──────────────────────────────────────────────────────────────
+# 8. Copy source — composer deps installed INSIDE the image so
+#    vendor/ is baked in and never overwritten by a bind-mount
+# ──────────────────────────────────────────────────────────────
 COPY . .
 
-############################
-# Laravel Directories
-############################
+# Install PHP dependencies (production, optimised autoloader)
+RUN composer install \
+        --no-dev \
+        --optimize-autoloader \
+        --no-interaction \
+        --prefer-dist
 
+# Install & build frontend assets
+RUN npm ci && npm run build && rm -rf node_modules
+
+# ──────────────────────────────────────────────────────────────
+# 9. Laravel storage directories
+# ──────────────────────────────────────────────────────────────
 RUN mkdir -p \
-    storage/logs \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/testing \
-    storage/framework/views \
-    bootstrap/cache
+        storage/logs \
+        storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/app/public \
+        bootstrap/cache
 
-############################
-# Permissions
-############################
+# ──────────────────────────────────────────────────────────────
+# 10. Permissions
+# ──────────────────────────────────────────────────────────────
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
-RUN chown -R www-data:www-data \
-    storage \
-    bootstrap/cache
-
-RUN chmod -R 775 \
-    storage \
-    bootstrap/cache
-
-############################
-# Entrypoint
-############################
-
-COPY docker/php/docker-entrypoint.sh \
-     /usr/local/bin/docker-entrypoint.sh
-
+# ──────────────────────────────────────────────────────────────
+# 11. Entrypoint
+# ──────────────────────────────────────────────────────────────
+COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-############################
-# Expose Apache
-############################
-
 EXPOSE 80
-
 ENTRYPOINT ["docker-entrypoint.sh"]
-
 CMD ["apache2-foreground"]
