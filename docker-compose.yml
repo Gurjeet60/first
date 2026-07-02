@@ -50,7 +50,7 @@ services:
   # ──────────────────────────────────────────────────────────
   laravel_mysql:
     image: mysql:8.0
-    container_name: laravel_mysql
+    container_name: coffee_mysql
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-rootsecret}"
       MYSQL_DATABASE: "${DB_DATABASE:-laracoffee}"
