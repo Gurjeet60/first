@@ -110,8 +110,10 @@ RUN chown -R www-data:www-data storage bootstrap/cache \
 # 11. Entrypoint
 # ──────────────────────────────────────────────────────────────
 COPY docker/php/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-EXPOSE 80
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 CMD ["apache2-foreground"]
+
