@@ -1,0 +1,85 @@
+# ============================================================
+# Laracoffee — docker-compose.yml
+# Single file, no CI override needed.
+# For local dev:  docker compose up -d --build
+# For Jenkins CI: same command, env vars injected by pipeline
+# ============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # Laravel Application
+  # ──────────────────────────────────────────────────────────
+  laravel_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    working_dir: /var/www/html
+    ports:
+      - "${APP_PORT:-80}:80"
+    environment:
+      APP_NAME: Laracoffee
+      APP_ENV: "${APP_ENV:-production}"
+      APP_KEY: "${APP_KEY:-}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_URL: "http://localhost"
+
+      DB_CONNECTION: mysql
+      DB_HOST: laravel_mysql
+      DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-laracoffee}"
+      DB_USERNAME: "${DB_USERNAME:-laracoffee_user}"
+      DB_PASSWORD: "${DB_PASSWORD:-secret}"
+
+      FILESYSTEM_DISK: public
+
+      CACHE_DRIVER: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+
+    depends_on:
+      laravel_mysql:
+        condition: service_healthy
+    networks:
+      - laravel-network
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────
+  # MySQL 8
+  # ──────────────────────────────────────────────────────────
+  laravel_mysql:
+    image: mysql:8.0
+    container_name: laravel_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-rootsecret}"
+      MYSQL_DATABASE: "${DB_DATABASE:-laracoffee}"
+      MYSQL_USER: "${DB_USERNAME:-laracoffee_user}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:-secret}"
+    ports:
+      - "${DB_PORT_HOST:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --max_allowed_packet=256M
+      --wait_timeout=28800
+      --max_connections=1000
+    networks:
+      - laravel-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootsecret}"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  laravel-network:
+    driver: bridge
