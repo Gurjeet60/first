@@ -17,7 +17,7 @@ services:
     environment:
       - DB_CONNECTION=mysql
       - DB_HOST=laravel_mysql
-     # - DB_PORT=3307
+      - DB_PORT=3306
       - DB_DATABASE=laravel
       - DB_USERNAME=laravel
       - DB_PASSWORD=NewPassword123!
