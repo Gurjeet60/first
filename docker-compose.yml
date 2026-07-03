@@ -14,7 +14,6 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
-    container_name: laravel_app
     working_dir: /var/www/html
     ports:
       - "${APP_PORT:-80}:80"
@@ -50,7 +49,6 @@ services:
   # ──────────────────────────────────────────────────────────
   laravel_mysql:
     image: mysql:8.0
-    container_name: laravel_mysql
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-rootsecret}"
       MYSQL_DATABASE: "${DB_DATABASE:-laracoffee}"
