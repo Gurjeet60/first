@@ -20,8 +20,7 @@ services:
     environment:
       APP_NAME: Laracoffee
       APP_ENV: "${APP_ENV:-production}"
-      APP_KEY: "${APP_KEY:-}"
-      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_DEBUG: "${APP_DEBUG:-true}"
       APP_URL: "http://localhost"
 
       DB_CONNECTION: mysql

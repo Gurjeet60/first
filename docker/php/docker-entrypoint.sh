@@ -1,30 +1,26 @@
 #!/bin/sh
-
 set -e
 
 echo "======================================"
 echo "Starting Laravel Container..."
 echo "======================================"
 
-# Wait a little for the database
-sleep 5
+cd /var/www/html
 
-# Generate app key if missing
-if ! grep -q "^APP_KEY=base64:" .env; then
-    php artisan key:generate --force
-fi
+# Fix permissions
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+
+# Clear old caches
+php artisan optimize:clear
 
 # Run migrations
 php artisan migrate --force || true
 
-# Cache configuration
-php artisan config:cache || true
-php artisan route:cache || true
-php artisan view:cache || true
-
-# Fix permissions
-chown -R www-data:www-data storage bootstrap/cache || true
-chmod -R 775 storage bootstrap/cache || true
+# Rebuild caches
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
 
 echo "Laravel initialization completed."
 
