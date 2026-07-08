@@ -1,0 +1,205 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'master',
+                    credentialsId: 'github-pat',
+                    url: 'https://github.com/Gurjeet60/first.git'
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                sh '''
+                docker compose down --remove-orphans || true
+        
+                docker ps -aq --filter "name=first" | xargs -r docker rm -f
+        
+                docker network prune -f || true
+                '''
+            }
+        }
+
+       stage('Create .env') {
+            steps {
+                sh '''
+                cp -f .env.example .env
+                '''
+            }
+        }
+        
+        
+        stage('Patch docker-compose') {
+                steps {
+                    sh '''
+                    sed -i '/APP_KEY:/d' docker-compose.yml
+                    '''
+                }
+            }
+
+        stage('Build') {
+            steps {
+                sh '''
+                docker compose down -v --remove-orphans || true
+                docker compose build --no-cache
+                '''
+            }
+        }
+
+             stage('Start') {
+                    steps {
+                        sh '''
+                        docker compose up -d
+                
+                        sleep 15
+                
+                        docker compose ps
+                
+                        if ! docker compose ps | grep -q "laravel_app.*Up"; then
+                            echo "Laravel container failed to start."
+                
+                            docker compose logs laravel_app || true
+                
+                            exit 1
+                        fi
+                        '''
+                    }
+                }
+        
+        
+        
+
+       stage('Laravel Setup') {
+            steps {
+                sh '''
+                docker compose exec -T laravel_app composer install --no-interaction
+        
+                docker compose exec -T laravel_app chown -R www-data:www-data storage bootstrap/cache
+                docker compose exec -T laravel_app chmod -R 775 storage bootstrap/cache
+                
+                docker compose exec -T laravel_app php artisan key:generate 
+                docker compose exec -T laravel_app php artisan optimize:clear
+                docker compose exec -T laravel_app php artisan storage:link
+                docker compose exec -T laravel_app php artisan migrate --force
+                docker compose exec -T laravel_app php artisan db:seed 
+                docker compose exec -T laravel_app php artisan config:cache
+                '''
+            }
+        }
+        
+        stage('Enable Debug') {
+            steps {
+                sh '''
+                docker compose exec -T laravel_app bash -c "
+                sed -i 's/^APP_DEBUG=.*/APP_DEBUG=true/' .env
+                sed -i 's/^APP_ENV=.*/APP_ENV=local/' .env
+                php artisan optimize:clear
+                "
+                '''
+            }
+        }
+        
+        stage('Check Storage') {
+            steps {
+                sh '''
+                docker compose exec -T laravel_app ls -la storage
+                docker compose exec -T laravel_app ls -la storage/logs || true
+        
+                docker compose exec -T laravel_app mkdir -p storage/logs
+        
+                docker compose exec -T laravel_app touch storage/logs/laravel.log
+        
+                docker compose exec -T laravel_app chmod -R 775 storage
+        
+                docker compose exec -T laravel_app chown -R www-data:www-data storage bootstrap/cache
+        
+                docker compose exec -T laravel_app ls -la storage/logs
+                
+                echo "===== Laravel Log ====="
+        
+                docker compose exec -T laravel_app mkdir -p storage/logs
+        
+                docker compose exec -T laravel_app touch storage/logs/laravel.log
+        
+                docker compose exec -T laravel_app chmod -R 777 storage
+        
+                docker compose exec -T laravel_app tail -100 storage/logs/laravel.log || true
+                '''
+            }
+        }
+        
+        stage('Debug APP_KEY') {
+            steps {
+                sh '''
+                    echo "========== .env =========="
+                    docker compose exec -T laravel_app cat /var/www/html/.env | grep APP_KEY
+        
+                    echo "========== config =========="
+                    docker compose exec -T laravel_app php artisan tinker --execute="echo env('APP_KEY');"
+                    docker compose exec -T laravel_app php artisan tinker --execute="echo config('app.key');"
+        
+                    echo "========== env =========="
+                    docker compose exec -T laravel_app printenv | grep APP_KEY || true
+                '''
+            }
+        }
+        
+        stage('Debug Container') {
+            steps {
+                sh '''
+                echo "========== Docker PS =========="
+                docker compose ps
+        
+                echo "========== Container Logs =========="
+                docker compose logs laravel_app || true
+        
+                echo "========== Exit Code =========="
+                docker inspect $(docker compose ps -q laravel_app) --format='ExitCode={{.State.ExitCode}} Error={{.State.Error}}' || true
+                '''
+            }
+        }
+        
+        stage('Debug') {
+            steps {
+                sh '''
+                
+                echo "========== Laravel About =========="
+                docker compose exec -T laravel_app php artisan about || true
+        
+                echo "========== Migration Status =========="
+                docker compose exec -T laravel_app php artisan migrate:status || true
+        
+                echo "========== APP_KEY =========="
+                docker compose exec -T laravel_app grep APP_KEY .env || true
+        
+                echo "========== Config APP_KEY =========="
+                docker compose exec -T laravel_app php artisan tinker --execute="echo config('app.key');" || true
+                '''
+            }
+        }
+    }
+      post {
+        always {
+            sh '''
+            echo "========== Docker Compose PS =========="
+            docker compose ps || true
+
+            echo "========== Laravel Container Logs =========="
+            docker compose logs laravel_app || true
+
+            echo "========== MySQL Container Logs =========="
+            docker compose logs laravel_mysql || true
+
+            echo "========== Docker Containers =========="
+            docker ps -a || true
+            '''
+        }
+    }
+}
