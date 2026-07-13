@@ -15,3 +15,7 @@ yarn-error.log
 /.idea
 /.vscode
 /sampleminikube-linux-amd64
+minikube-linux-amd64
+*.exe
+kubectl
+*-linux-amd64
