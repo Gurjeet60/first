@@ -3,6 +3,7 @@ kind: Deployment
 
 metadata:
   name: mysql
+  namespace: laravel
 
 spec:
   replicas: 1

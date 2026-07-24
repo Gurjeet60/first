@@ -77,7 +77,7 @@ WORKDIR /var/www/html
 #    vendor/ is baked in and never overwritten by a bind-mount
 # ──────────────────────────────────────────────────────────────
 COPY . .
-
+RUN grep APP_KEY .env
 # Install PHP dependencies (production, optimised autoloader)
 RUN composer install \
         --no-dev \

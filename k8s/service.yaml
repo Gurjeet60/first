@@ -3,6 +3,7 @@ kind: Service
 
 metadata:
   name: laravel-service
+  namespace: laravel
 
 spec:
 
