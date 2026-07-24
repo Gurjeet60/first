@@ -14,6 +14,9 @@ chmod -R 775 storage bootstrap/cache
 # Clear old caches
 php artisan optimize:clear
 
+# Create storage symlink if it doesn't already exist
+php artisan storage:link || true
+
 # Run migrations
 php artisan migrate --force || true
 
