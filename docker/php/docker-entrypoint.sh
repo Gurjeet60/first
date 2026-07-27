@@ -11,14 +11,14 @@ cd /var/www/html
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
+# Run migrations
+php artisan migrate --force || true
+
 # Clear old caches
 php artisan optimize:clear
 
 # Create storage symlink if it doesn't already exist
 php artisan storage:link || true
-
-# Run migrations
-php artisan migrate --force || true
 
 # Rebuild caches
 php artisan config:cache
