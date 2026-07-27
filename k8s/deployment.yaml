@@ -27,7 +27,11 @@ spec:
 
         ports:
         - containerPort: 80
-       
+        envFrom:
+         - configMapRef:
+              name: laravel-config
+
+
         env:
    
          - name: DB_CONNECTION
@@ -42,3 +46,4 @@ spec:
            value: laravel
          - name: DB_PASSWORD
            value: NewPassword123!
+
