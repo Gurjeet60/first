@@ -1,0 +1,194 @@
+---
+# Source: laracoffee/templates/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: laravel
+---
+# Source: laracoffee/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: laravel-secret
+  namespace: laravel
+type: Opaque
+stringData:
+  APP_KEY: ""
+  DB_PASSWORD: "NewPassword123!"
+  MYSQL_ROOT_PASSWORD: "hello@123"
+---
+# Source: laracoffee/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: laravel-config
+  namespace: laravel
+data:
+  APP_DEBUG: "true"
+  APP_ENV: "production"
+  APP_NAME: "Laravel"
+  APP_URL: "http://laracoffee.local"
+  CACHE_DRIVER: "database"
+  QUEUE_CONNECTION: "sync"
+  SESSION_DRIVER: "database"
+---
+# Source: laracoffee/templates/mysql-pvc.yaml
+apiVersion: v1
+
+kind: PersistentVolumeClaim
+
+metadata:
+
+  name: mysql-pvc
+
+  namespace:  laravel
+
+spec:
+
+  accessModes:
+
+    - ReadWriteOnce
+
+  resources:
+
+    requests:
+
+      storage: 5Gi
+---
+# Source: laracoffee/templates/mysql-service.yaml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: mysql
+  namespace: laravel
+
+spec:
+  selector:
+    app: mysql
+
+  ports:
+  - name: mysql
+    protocol: TCP
+    port: 3306
+    targetport: 3306
+
+
+  type: ClusterIP
+---
+# Source: laracoffee/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: laravel-service
+  namespace: laravel
+spec:
+  type: NodePort
+  selector:
+    app: laravel-app
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# Source: laracoffee/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-app
+  namespace: laravel
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: laravel-app
+  template:
+    metadata:
+      labels:
+        app: laravel-app
+    spec:
+      containers:
+      - name: laravel-app
+        image: "gurjeet12/laravel_app:latest"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        envFrom:
+        - configMapRef:
+            name: laravel-config
+        env:
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: laravel-secret
+              key: APP_KEY
+        - name: DB_CONNECTION
+          value: "mysql"
+        - name: DB_HOST
+          value: "mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_DATABASE
+          value: "laravel"
+        - name: DB_USERNAME
+          value: "laravel"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: laravel-secret
+              key: DB_PASSWORD
+---
+# Source: laracoffee/templates/mysql-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: mysql
+  namespace: laravel
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: mysql
+
+  template:
+    metadata:
+      labels:
+        app: mysql
+
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: laravel-secret
+                  key: MYSQL_ROOT_PASSWORD
+
+            - name: MYSQL_DATABASE
+              value: "laravel"
+
+            - name: MYSQL_USER
+              value: "laravel"
+
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: laravel-secret
+                  key: DB_PASSWORD
+
+          ports:
+            - containerPort: 3306
+
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc

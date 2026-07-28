@@ -1,0 +1,36 @@
+namespace: laravel
+
+image:
+  repository: gurjeet12/laravel_app
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 3
+
+appKey: ""   # injected at deploy time by Jenkins, never hardcoded here
+
+config:
+  APP_NAME: Laravel
+  APP_ENV: production
+  APP_DEBUG: "true"
+  APP_URL: http://laracoffee.local
+  SESSION_DRIVER: database
+  CACHE_DRIVER: database
+  QUEUE_CONNECTION: sync
+
+database:
+  connection: mysql
+  host: mysql
+  port: 3306
+  name: laravel
+  username: laravel
+  password: NewPassword123!
+  mysqlRootPassword: hello@123
+
+service:
+  type: NodePort
+  port: 80
+
+mysql:
+  image: mysql:8.0
+  storage: 5Gi
