@@ -6,384 +6,284 @@ pipeline {
         timestamps()
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 40, unit: 'MINUTES')
     }
 
     environment {
-        IMAGE_NAME      = "gurjeet12/laravel_app"
-        IMAGE_TAG       = "v${BUILD_NUMBER}"
-        NAMESPACE       = "laravel"
-        DOCKER_COMPOSE  = "docker compose"
+
+        IMAGE_NAME = "gurjeet12/laravel_app"
+        IMAGE_TAG  = "v${BUILD_NUMBER}"
+
+        CHART_DIR  = "./Helm/Laracoffee"
+
+        RELEASE_NAME = "laravel"
+        NAMESPACE    = "laravel"
+
+        DOCKER_CREDENTIALS = "dokerhub"
+        GITHUB_CREDS       = "github-pat"
+
+        KUBECONFIG = "/var/lib/jenkins/.kube/config"
+
+        REGISTRY = "docker.io"
+
     }
 
     stages {
 
-        /*
-        ============================================================
-        STAGE 1 : CHECKOUT SOURCE
-        ============================================================
-        */
+    /*--------------------------------------------------------------*/
+    stage('Checkout Source') {
 
-        stage('Checkout Source') {
+        steps {
 
-            steps {
+            cleanWs()
 
-                cleanWs()
+            git(
+                branch: 'master',
+                credentialsId: env.GITHUB_CREDS,
+                url: 'https://github.com/Gurjeet60/first.git'
+            )
 
-                echo "========== CHECKOUT SOURCE =========="
+            sh '''
+            echo "Repository Checked Out"
 
-                git(
-                    branch: 'master',
-                    credentialsId: 'github-pat',
-                    url: 'https://github.com/Gurjeet60/first.git'
-                )
+            git log --oneline -5
+            '''
 
-                sh '''
-                    set -e
-
-                    echo "Latest Commit"
-
-                    git log --oneline -1
-                '''
-            }
         }
 
-        /*
-        ============================================================
-        STAGE 2 : PREPARE ENVIRONMENT
-        ============================================================
-        */
+    }
 
-        stage('Prepare Environment') {
+    /*--------------------------------------------------------------*/
 
-            steps {
+    stage('Validate Environment') {
 
-                echo "========== PREPARE ENVIRONMENT =========="
+        steps {
 
-                sh '''
-                    set -e
-                    cp -f .env.example .env
+            sh '''
+
+            set -e
+
+            echo "Checking Required Tools..."
+
+            docker --version
+            kubectl version --client
+            helm version
+
+            echo ""
+            echo "Checking Kubernetes..."
+
+            kubectl cluster-info
+
+            echo ""
+            echo "Checking Namespace..."
+
+            kubectl get ns ${NAMESPACE} \
+            || kubectl create namespace ${NAMESPACE}
+
+            '''
+
+        }
+
+    }
+    
+    /*--------------------------------------------------------------*/
+      stage('Install PHP Dependencies') {
+
+                steps {
         
-                    # Generate a real Laravel-compatible APP_KEY BEFORE the image is built
-                    APP_KEY="base64:$(openssl rand -base64 32)"
-                    sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-        
-                    php -r "file_exists('.env') || exit(1);"
-                    echo ".env file created with APP_KEY successfully."
-                    grep APP_KEY .env
-                '''
-            }
-        }
-
-        /*
-        ============================================================
-        STAGE 3 : BUILD DOCKER IMAGE
-        ============================================================
-        */
-
-        stage('Build Docker Image') {
-
-            steps {
-
-                echo "========== BUILD DOCKER IMAGE =========="
-
-                sh '''
-                    set -e
-
-                    ${DOCKER_COMPOSE} build
-
-                    docker images
-
-                    docker tag first-laravel_app:latest gurjeet12/laravel_app:v${BUILD_NUMBER}
-
-                    docker tag first-laravel_app:latest gurjeet12/laravel_app:latest
-
-                    echo "Docker image created successfully."  
-                '''
-            }
-        }
-
-        /*
-        ============================================================
-        STAGE 4 : START CONTAINERS & RUN TESTS
-        ============================================================
-        */
-
-        stage('Start Containers & Run Tests') {
-
-            steps {
-
-                echo "========== START CONTAINERS =========="
-
-                sh '''
-                    set -e
-
-                    ${DOCKER_COMPOSE} up -d
-
-                    echo "Waiting for Laravel container..."
-
-                    until ${DOCKER_COMPOSE} ps | grep -q "laravel_app.*Up"
-                    do
-                        sleep 5
-                    done
-
-                    echo "Installing Composer Packages..."
-
-                    ${DOCKER_COMPOSE} exec -T laravel_app \
-                        composer install \
-                        --no-interaction \
-                        --prefer-dist \
-                        --optimize-autoloader
-
-                    echo "Generating APP_KEY..."
-
-                   ${DOCKER_COMPOSE} exec -T laravel_app php artisan key:generate --force
-
-                   APP_KEY=$(${DOCKER_COMPOSE} exec -T laravel_app sh -c "grep '^APP_KEY=' .env | cut -d= -f2-")
-                    
-                   echo "APP_KEY=$APP_KEY"
-
-                   
-                   
-                   ${DOCKER_COMPOSE} exec -T laravel_app cat bootstrap/cache/config.php 2>&1 | head -5
-                   ${DOCKER_COMPOSE} exec -T laravel_app whoami
-                   ${DOCKER_COMPOSE} exec -T laravel_app ls -la .env
-
-                    ${DOCKER_COMPOSE} exec -T laravel_app \
-                        php artisan storage:link || true
-
-                    ${DOCKER_COMPOSE} exec -T laravel_app \
-                        php artisan optimize:clear
-
-                    ${DOCKER_COMPOSE} exec -T laravel_app \
-                        php artisan migrate --force
-
-                    ${DOCKER_COMPOSE} exec -T laravel_app \
-                        php artisan db:seed --force
-                        
-                    ${DOCKER_COMPOSE} exec -T laravel_app bash -c "
-                    mkdir -p storage/logs &&
-                    touch storage/logs/laravel.log &&
-                    chown -R www-data:www-data storage bootstrap/cache &&
-                    chmod -R 775 storage bootstrap/cache
-                    "
-
-                    if ${DOCKER_COMPOSE} exec -T laravel_app test -d tests
-                    then
-                        echo "Running Laravel Tests..."
-
-                        ${DOCKER_COMPOSE} exec -T laravel_app \
-                            php artisan test
-                    else
-                        echo "No test suite found. Skipping tests."
-                    fi
-
-                    echo "Build & Test completed successfully."
-                '''
-            }
-        }
-        
-                /*
-        ============================================================
-        STAGE 5 : PUSH DOCKER IMAGE
-        ============================================================
-        */
-
-        stage('Push Docker Image') {
-
-            steps {
-
-                echo "========== PUSH DOCKER IMAGE =========="
-
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dokerhub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_TOKEN'
-                    )
-                ]) {
-
                     sh '''
-                        set -e
-
-                        echo "$DOCKER_TOKEN" | docker login \
-                            -u "$DOCKER_USER" \
-                            --password-stdin
-
-                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
-
-                        docker push ${IMAGE_NAME}:latest
-
-                        docker logout
-
-                        echo "Docker image pushed successfully."
+        
+                    composer install \
+                        --no-dev \
+                        --prefer-dist \
+                        --optimize-autoloader \
+                        --no-interaction
+        
                     '''
+        
                 }
+        
             }
+
+    /*--------------------------------------------------------------*/
+
+    
+
+    stage('Prepare Laravel Environment') {
+
+        steps {
+
+            withCredentials([
+                string(
+                    credentialsId: 'laravel-app-key',
+                    variable: 'APP_KEY'
+                )
+            ]) {
+
+                sh '''
+
+                set -e
+
+                cp -f .env.example .env
+
+                sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+
+                php -r "file_exists('.env') || exit(1);"
+
+                php artisan optimize:clear  || true
+                
+                '''
+
+            }
+
         }
-        
-           /*
-        ============================================================
-        STAGE 6 : Ensure Minikube Running
-        ============================================================
-        */
-        
-        
-                 stage('Ensure Minikube Running') {
+
+    }
+
+    /*--------------------------------------------------------------*/
+    
+            stage('Build Docker Image') {
                         steps {
-                            sh '''
-                                set -e
-                                export KUBECONFIG=/var/lib/jenkins/.kube/config
-                                if ! minikube status | grep -q "host: Running"; then
-                                    echo "Minikube not running, starting it..."
-                                    minikube start --driver=docker
-                                    sleep 5
-                                else
-                                    echo "Minikube already running."
-                                fi
-                                kubectl get nodes
-                            '''
+                            sh """
+                                echo "Building Docker image..."
+                    
+                                docker build \
+                                    -f docker/php/Dockerfile \
+                                    -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                                    -t ${IMAGE_NAME}:latest \
+                                    .
+                    
+                                docker images | grep laravel_app
+                            """
                         }
                     }
 
-        /*
-        ============================================================
-        STAGE 7 : DEPLOY TO KUBERNETES
-        ============================================================
-        */
+  
 
-        stage('Deploy to Kubernetes') {
-
+    
+    
+            stage('Push Docker Image') {
             steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dokerhub') {
 
-                echo "========== DEPLOY TO KUBERNETES =========="
+                        sh """
+                            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
 
-                sh '''
-                    set -e
-                    export KUBECONFIG=/var/lib/jenkins/.kube/config
-                    kubectl config use-context minikube
-        
-                    helm upgrade --install laravel ./Helm/Laracoffee \
-                      -n laravel \
-                      --create-namespace \
-                      --set image.tag=v179 \
-                      --set-string appKey="base64:YOUR_APP_KEY"
-                    
-                   echo "Deployment completed successfully."
-                    
-                '''
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+
+                            docker push ${IMAGE_NAME}:latest
+                        """
+                    }
+                }
             }
         }
 
-        /*
-        ============================================================
-        STAGE 8 : VERIFY DEPLOYMENT
-        ============================================================
-        */
+               stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'laravel-app-key', variable: 'APP_KEY')
+                    ]) {
+
+                        sh """
+                        export KUBECONFIG=/var/lib/jenkins/.kube/config
+
+                        helm upgrade --install laravel ./Helm/Laracoffee \
+                            --namespace laravel \
+                            --create-namespace \
+                            --wait \
+                            --timeout 5m \
+                            --atomic \
+                            --set image.repository=${IMAGE_NAME} \
+                            --set image.tag=${IMAGE_TAG} \
+                            --set-string appKey="\$APP_KEY"
+                        """
+                    }
+                }
+            }
+        }
 
         stage('Verify Deployment') {
-
             steps {
-
-                echo "========== VERIFY DEPLOYMENT =========="
-
                 sh '''
-                    set -e
+                export KUBECONFIG=/var/lib/jenkins/.kube/config
 
-                    kubectl rollout status deployment/laravel-app \
-                     -n ${NAMESPACE}  --timeout=300s 
+                kubectl rollout status deployment/laravel-app \
+                    -n laravel \
+                    --timeout=180s
 
-                    kubectl get pods -n ${NAMESPACE}
-
-                    kubectl get svc -n ${NAMESPACE}
-
-                    kubectl get deployment -n ${NAMESPACE}
+                kubectl get pods -n laravel
+                kubectl get svc -n laravel
                 '''
             }
         }
 
-        /*
-        ============================================================
-        STAGE 9 : APPLICATION HEALTH CHECK
-        ============================================================
-        */
-
-        stage('Application Health Check') {
-
+        stage('Health Check') {
             steps {
+                sh '''
+                export KUBECONFIG=/var/lib/jenkins/.kube/config
 
-                echo "========== APPLICATION HEALTH CHECK =========="
+                POD=$(kubectl get pod \
+                    -n laravel \
+                    -l app=laravel-app \
+                    -o jsonpath='{.items[0].metadata.name}')
 
-                  sh '''
-                    set -e
-                    export KUBECONFIG=/var/lib/jenkins/.kube/config
-        
-                    POD=$(kubectl get pods -n laravel -l app=laravel-app \
-                      --field-selector=status.phase=Running \
-                      --sort-by=.metadata.creationTimestamp \
-                      -o jsonpath='{.items[-1:].metadata.name}')
-        
-                    kubectl wait --for=condition=Ready pod/$POD -n laravel --timeout=120s
-                    kubectl exec -n laravel $POD -- php artisan about
-                    echo "Application is healthy."
+                kubectl exec -n laravel $POD -- php artisan about
                 '''
             }
         }
-
-    }   // ================= END OF STAGES ===================
+    }
 
     post {
 
         success {
-
-            echo "========== DEPLOYMENT SUCCESSFUL =========="
+            echo '========================================'
+            echo 'Deployment Successful'
+            echo '========================================'
 
             sh '''
-                kubectl get pods -n ${NAMESPACE}
+            export KUBECONFIG=/var/lib/jenkins/.kube/config
 
-                kubectl get svc -n ${NAMESPACE}
+            kubectl get all -n laravel
 
-                kubectl get deployment -n ${NAMESPACE}
+            echo ""
+            echo "Application URL:"
+            minikube service laravel-service \
+                -n laravel \
+                --url || true
             '''
         }
 
         failure {
-
-            echo "========== DEPLOYMENT FAILED =========="
+            echo '========================================'
+            echo 'Deployment Failed'
+            echo '========================================'
 
             sh '''
-                kubectl get all -n ${NAMESPACE} || true
+            export KUBECONFIG=/var/lib/jenkins/.kube/config
 
-                POD=$(kubectl get pods \
-                    -n ${NAMESPACE} \
-                    -l app=laravel-app \
-                    -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || true)
+            kubectl get pods -n laravel || true
 
-                if [ -n "$POD" ]; then
-                    kubectl logs $POD -n ${NAMESPACE} || true
-                fi
+            kubectl describe pods -n laravel || true
 
-                ${DOCKER_COMPOSE} logs || true
-
-                kubectl rollout undo deployment/laravel-app \
-                    -n ${NAMESPACE} || true
+            kubectl logs \
+                -n laravel \
+                -l app=laravel-app \
+                --tail=200 || true
             '''
         }
 
         always {
 
-            echo "========== CLEANUP =========="
-
-            sh '''
-                ${DOCKER_COMPOSE} down -v --remove-orphans || true
-
-                docker container prune -f --filter "label!=io.x-k8s.kic.cluster=minikube" || true
-
-                docker container prune -f || true
-            '''
+            echo 'Cleaning workspace...'
 
             cleanWs()
+
+            sh '''
+            docker image prune -f || true
+            docker container prune -f || true
+            '''
         }
     }
-
-}   // ================= END OF PIPELINE ===================
+}
