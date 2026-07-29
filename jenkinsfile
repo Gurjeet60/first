@@ -260,30 +260,14 @@ pipeline {
 
                 sh '''
                     set -e
-                    
                     export KUBECONFIG=/var/lib/jenkins/.kube/config
-                    
                     kubectl config use-context minikube
-                    
-                    kubectl apply -f k8s/namespace.yaml
-
-                    kubectl apply -f k8s/configmap.yaml -n laravel
-
-                    kubectl apply -f k8s/mysql-pvc.yaml -n laravel
-
-                    kubectl apply -f k8s/mysql-service.yaml -n laravel
-
-                    kubectl apply -f k8s/mysql-deployment.yaml -n laravel
-
-                    kubectl apply -f k8s/service.yaml -n laravel
-
-                    kubectl apply -f k8s/deployment.yaml -n laravel
-
-                   kubectl set image deployment/laravel-app \
-                   laravel-app=${IMAGE_NAME}:${IMAGE_TAG} -n laravel 
-                   
-                   echo "Waiting for rollout to complete..."
-                   kubectl rollout status deployment/laravel-app -n laravel --timeout=300s
+        
+                    helm upgrade --install laravel ./Helm/Laracoffee \
+                      -n laravel \
+                      --create-namespace \
+                      --set image.tag=v179 \
+                      --set-string appKey="base64:YOUR_APP_KEY"
                     
                    echo "Deployment completed successfully."
                     
@@ -393,7 +377,7 @@ pipeline {
             sh '''
                 ${DOCKER_COMPOSE} down -v --remove-orphans || true
 
-                docker image prune -f || true
+                docker container prune -f --filter "label!=io.x-k8s.kic.cluster=minikube" || true
 
                 docker container prune -f || true
             '''
