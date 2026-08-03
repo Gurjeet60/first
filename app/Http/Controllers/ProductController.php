@@ -46,7 +46,7 @@ class ProductController extends Controller
         ]);
 
         if (!isset($validatedData["image"])) {
-            $validatedData["image"] = env("IMAGE_PRODUCT");
+            $validatedData['image'] = config("app.image_profile");
         } else {
             $validatedData["image"] = $request->file("image")->store("product");
         }
