@@ -10,7 +10,10 @@ class ProductController extends Controller
 {
     public function index()
     {
-        dd("Controller reached");
+         $title = "Product";
+         $product = Product::all();
+
+         return view('product.index', compact('title', 'product'));
     }
 
 
