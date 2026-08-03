@@ -118,6 +118,10 @@ return [
 
     'faker_locale' => 'en_US',
 
+
+    'image_profile' => env('IMAGE_PROFILE'),
+    'image_product' => env('IMAGE_PRODUCT'),
+
     /*
     |--------------------------------------------------------------------------
     | Encryption Key
