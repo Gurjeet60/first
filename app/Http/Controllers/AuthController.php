@@ -57,7 +57,7 @@ class AuthController extends Controller
         ]);
 
         $validatedData['password'] = Hash::make($validatedData['password']);
-        $validatedData['image'] = env("IMAGE_PROFILE");
+        $validatedData['image'] = config('app.image_profile');
         $validatedData = array_merge($validatedData, [
             "coupon" => 0,
             "point" => 0,
