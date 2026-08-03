@@ -95,7 +95,7 @@ class ProductController extends Controller
 
         try {
             if ($request->file("image")) {
-                if ($request->oldImage != env("IMAGE_PRODUCT")) {
+                if ($request->oldImage != config("app.image_product")) {
                     Storage::delete($request->oldImage);
                 }
 
